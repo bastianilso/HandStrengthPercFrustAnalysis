@@ -7,6 +7,11 @@ library(plotly)
 # - Toggle, Color=Condition
 # - Jitter, Amount
 
+# Visualization template for plotly - removes unnecessary defaults
+vistemplate <- plot_ly() %>%
+  config(scrollZoom = TRUE, displaylogo = FALSE, modeBarButtonsToRemove = c("pan2d","select2d","hoverCompareCartesian", "toggleSpikelines","zoom2d","toImage", "sendDataToCloud", "editInChartStudio", "lasso2d", "drawclosedpath", "drawopenpath", "drawline", "drawcircle", "eraseshape", "autoScale2d", "hoverClosestCartesian","toggleHover", "")) %>%
+  layout(dragmode = "pan", showlegend=FALSE, xaxis=list(mirror=T, ticks='outside', showline=T), yaxis=list(mirror=T, ticks='outside', showline=T))
+
 # How to export plots to PDF from Plotly
 orca(fig, "surface-plot.pdf", width=350, height=350)
 
@@ -179,6 +184,73 @@ fig <- D_comb %>%
   layout(xaxis = list(title="Level of Control", range=c(0,1.1)), yaxis = list(range=c(0,1.1), scaleanchor="x"), showlegend=FALSE)
 orca(fig, "hand-level-of-control-frustration.pdf", width=350, height=350)
 
+# Violin Plot Level of Control vs Perceived Control
+D_excl$Condition <- as.character(D_excl$Condition)
+D_excl$Condition[D_excl$Condition == "100"] <- "Ref."
+D_excl$Condition <- as.factor(D_excl$Condition)
+D_excl = D_excl %>%
+  rowwise() %>%
+  mutate(PureControl = ifelse(Fab.Rate == 0,Recog.Rate,NA),
+         FabControl = ifelse(Fab.Rate > 0,Fab.Rate + Recog.Rate, NA))
+
+PercPureCurve = supsmu(D_excl$PureControl, D_excl$PercNormalized)
+PercFabCurve = supsmu(D_excl$FabControl, D_excl$PercNormalized)
+PercPureCurve$x <- as.character(PercPureCurve$x)
+PercFabCurve$x <- as.character(PercFabCurve$x)
+PercPureCurve$x[PercPureCurve$x == "0.5"] <- "0"
+PercPureCurve$x[PercPureCurve$x == "1"] <- "Ref."
+PercFabCurve$x[PercFabCurve$x == "0.65"] <- "15"
+PercFabCurve$x[PercFabCurve$x == "0.8"] <- "30"
+PercFabCurve$x[PercFabCurve$x == "1"] <- "50"
+PercCurve <- PercPureCurve %>% bind_rows(PercFabCurve)
+PercCurve$x <- factor(PercCurve$x, levels=c("0", "15", "30", "50", "Ref."))
+PercCurve <- PercCurve %>% arrange(x)
+
+D_error <- D_excl %>% dplyr::group_by(Condition) %>%
+  dplyr::summarise(numberOfParticipants = length(unique(D_excl$Participant)),
+            perc_error = qnorm(0.975)*sd(PercNormalized)/sqrt(numberOfParticipants),
+            perc_error_left = 5-perc_error,
+            perc_error_right = 5+perc_error) 
+D_error$Condition <- factor(D_error$Condition, levels=c("0", "15", "30", "50", "Ref."))
+
+PercCurve <- PercCurve %>% merge(D_error, by.x=c("x"), by.y=c("Condition"))
+
+
+fig <- vistemplate %>%
+  add_trace(x=factor(D_excl$Condition, levels=c("0", "15", "30", "50", "Ref.")), y=jitter(D_excl$PercNormalized,amount=.02),
+            scalemode='width',points='all', pointpos=0,name='C', jitter=.3,
+            scalegroup='C', type="violin", spanmode="soft", width=1, bandwidth=.06, color=I('darkgray')) %>%
+  add_trace(data=PercCurve, x=~x, y=~y, type='scatter', mode='lines+markers', color=I('black'),
+            error_y= list(array=~perc_error)) %>%
+  layout(yaxis = list(range=c(0,1.1), title="Perceived Control", violinmode = 'overlay', violingap = 0), xaxis=list(title="Fabrication Rate (%)"))
+
+orca(fig, "level-of-control-perceived.pdf", width=350, height=350)
+
+# Violin Plot Level of Control vs Frustration
+FrustPureCurve = supsmu(D_excl$PureControl, D_excl$FrustNormalized)
+FrustFabCurve = supsmu(D_excl$FabControl, D_excl$FrustNormalized)
+FrustPureCurve$x <- as.character(FrustPureCurve$x)
+FrustFabCurve$x <- as.character(FrustFabCurve$x)
+FrustPureCurve$x[FrustPureCurve$x == "0.5"] <- "0"
+FrustPureCurve$x[FrustPureCurve$x == "1"] <- "Ref."
+FrustFabCurve$x[FrustFabCurve$x == "0.65"] <- "15"
+FrustFabCurve$x[FrustFabCurve$x == "0.8"] <- "30"
+FrustFabCurve$x[FrustFabCurve$x == "1"] <- "50"
+FrustCurve <- FrustPureCurve %>% bind_rows(FrustFabCurve)
+FrustCurve$x <- factor(FrustCurve$x, levels=c("0", "15", "30", "50", "Ref."))
+FrustCurve <- FrustCurve %>% arrange(x)
+
+FrustCurve <- FrustCurve %>% merge(D_error, by.x=c("x"), by.y=c("Condition"))
+
+fig <- vistemplate %>%
+  add_trace(x=factor(D_excl$Condition, levels=c("0", "15", "30", "50", "Ref.")), y=jitter(D_excl$FrustNormalized,amount=.02),
+            scalemode='width',points='all', pointpos=0,name='C', jitter=.3,
+            scalegroup='C', type="violin", spanmode="soft", width=1, bandwidth=.08, color=I('darkgray')) %>%
+  add_trace(x=FrustCurve$x, y=FrustCurve$y, type='scatter', mode='lines+markers', color=I('black'),
+            error_y= list(array=FrustCurve$perc_error)) %>%
+  layout(yaxis = list(range=c(0,1.1), title="Frustration", violinmode = 'overlay', violingap = 0), xaxis=list(title="Fabrication Rate (%)"))
+
+ orca(fig, "level-of-control-frustration.pdf", width=350, height=350)
 ###################################
 # CALCULATE ACTION-OUTCOME RATES  #
 ###################################
@@ -200,14 +272,14 @@ D_comb %>%
 PercPureCurve = supsmu(D_comb$PureControl, D_comb$PerceivedControl)
 PercFabCurve = supsmu(D_comb$FabControl, D_comb$PerceivedControl)
 D_comb %>%
-  mutate(PerceivedControl = jitter(PerceivedControl, amount=.03),
-         PureControl = jitter(PureControl, amount=.03),
-         FabControl = jitter(FabControl, amount=.03)) %>%
+  mutate(PerceivedControl = jitter(as.numeric(PerceivedControl), amount=.03),
+         PureControl = jitter(as.numeric(PureControl), amount=.03),
+         FabControl = jitter(as.numeric(FabControl), amount=.03)) %>%
   plot_ly() %>%
-  add_trace(name="Pure Control", x=~PureControl, y=~PerceivedControl) %>%
-  add_trace(name="Fab Control", x=~FabControl, y=~PerceivedControl) %>%
-  add_trace(name="Pure Control", x=PercPureCurve$x, y=PercPureCurve$y, mode='lines+markers', color=I('SkyBlue')) %>%
-  add_trace(name="Fab Control", x=PercFabCurve$x, y=PercFabCurve$y, mode='lines+markers', color=I('Salmon')) %>%
+  add_trace(name="Pure Control", x=~BlinkRecogAcc, y=~PerceivedControl) %>%
+  add_trace(name="Fab Control", x=~BlinkFabAccRecog, y=~PerceivedControl) %>%
+  #add_trace(name="Pure Control", x=PercPureCurve$x, y=PercPureCurve$y, mode='lines+markers', color=I('SkyBlue')) %>%
+  #add_trace(name="Fab Control", x=PercFabCurve$x, y=PercFabCurve$y, mode='lines+markers', color=I('Salmon')) %>%
   layout(xaxis = list(title="Level of Control", range=c(0,1.1)), yaxis = list(range=c(0,1.1)))
 
 # Plot Level of Control vs Frustration

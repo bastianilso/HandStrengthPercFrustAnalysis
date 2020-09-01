@@ -41,6 +41,9 @@ D <- gsheet2tbl(url)
 # Load recognition rates, as logged by the game.
 load("data_rates.rda")
 
+# Load Kiwi Data from previous study.
+load("kiwidata.rda")
+
 D_rates <- D_rates %>%
   mutate(PID = as.factor(PID))
 
@@ -60,13 +63,38 @@ D = bind_rows(D %>% filter(Condition == "0", Recog.Rate == 0.5, Fab.Rate == 0.0)
               D %>% filter(Condition == "50", Recog.Rate == 0.5, Fab.Rate == 0.50))
 
 # Exclude participants who lack trials?
-D %>%
-  plot_ly() %>%
-  add_trace(x=~Participant, y=~Condition)
-excludes <- c("1","13","16","17","21", "24")
+#D %>%
+#  plot_ly() %>%
+#  add_trace(x=~Participant, y=~Condition)
 
+excludes <- c("1","13","16","17","21", "24")
 D_excl <- D %>% filter(!Participant %in% excludes)
 
+################################
+# T-Test between Kiwi and Hand #
+################################
+kiwi_0 <- data %>% filter(shamRate == "0") %>% dplyr::select(FrustNormalized, controlNormalized)
+kiwi_15 <- data %>% filter(shamRate == "15") %>% dplyr::select(FrustNormalized, controlNormalized)
+kiwi_30 <- data %>% filter(shamRate == "30") %>% dplyr::select(FrustNormalized, controlNormalized)
+kiwi_avg <- data %>% dplyr::group_by(PID) %>% dplyr::summarise(FrustAvg = mean(FrustNormalized), ContAvg = mean(controlNormalized))
+hand_0 <- D_excl %>% filter(Condition == "0") %>% dplyr::select(FrustNormalized, PercNormalized)
+hand_15 <- D_excl %>% filter(Condition == "15") %>% dplyr::select(FrustNormalized, PercNormalized)
+hand_30 <- D_excl %>% filter(Condition == "30") %>% dplyr::select(FrustNormalized, PercNormalized)
+hand_avg <- D_excl %>% filter(Condition %in% c("0","15","30")) %>% dplyr::group_by(Participant) %>% dplyr::summarise(FrustAvg = mean(FrustNormalized), PercAvg = mean(PercNormalized))
+
+t.test(kiwi_0$controlNormalized, hand_0$PercNormalized)
+t.test(kiwi_15$controlNormalized, hand_15$PercNormalized)
+t.test(kiwi_30$controlNormalized, hand_30$PercNormalized)
+t.test(kiwi_avg$ContAvg, hand_avg$PercAvg)
+
+t.test(kiwi_0$FrustNormalized, hand_0$FrustNormalized)
+t.test(kiwi_15$FrustNormalized, hand_15$FrustNormalized)
+t.test(kiwi_30$FrustNormalized, hand_30$FrustNormalized)
+t.test(kiwi_avg$FrustAvg, hand_avg$FrustAvg)
+
+# Normal distribution test
+density <- density(hand_avg$PercAvg)
+plot_ly() %>% add_trace(x=~density$x, y=~density$y, type='scatter', mode='lines', fill='tozeroy')
 
 ########################################
 # LINEAR MODEL CONDITION WITHOUT ORDER #
