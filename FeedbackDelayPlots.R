@@ -110,20 +110,30 @@ D_formula = D_D %>% inner_join(D_ratings)
 # Load the data
 load("data_action_analysis.rda")
 
-# Exclude poor recognition trials
-excludes <- c("1","13","16","17","21", "24")
-D_formula <- D_formula %>% filter(!Participant %in% excludes)
-
 D_formula$taskPercent<-ifelse(D_formula$Condition==100,100,D_formula$Condition+50)
 D_formula$delayBin<-as.factor(ifelse(D_formula$AvgDelay<median(D_formula$AvgDelay),"lo","hi"))
 ddd <- lm(as.numeric(PercNormalized*100) ~ as.numeric(fail_rate) * as.numeric(AvgDelay), data=D_formula)
 step(ddd)
 summary(ddd)
 
+####################################################
+# Plot 1: delayBin as median across all conditions #
+####################################################
+
 ggplot(D_formula,aes(x=fail_rate,y=PercNormalized,colour=delayBin,group=delayBin,shape=factor(Condition)))+geom_point()+ geom_smooth(method = "lm", fill = NA)
 summary(lm(formula = as.numeric(PercNormalized * 100) ~ as.numeric(fail_rate) * 
      as.numeric(AvgDelay), data = D_formula[D_formula$fail_rate>.75,]))
 
-D_formula %>%
-  plot_ly() %>%
-  add_trace(type='scatter', mode='markers', x=~fail_rate, y=~PercNormalized, color=~Condition)
+####################################################
+# Plot 2: delayBin as median across each condition #
+####################################################
+
+D_formula <- D_formula %>% group_by(Condition) %>%
+  mutate(medianprCondition = median(AvgDelay))
+
+D_formula %<>% group_by(Participant, Condition) %>%
+  mutate(delayBin = ifelse(AvgDelay < medianprCondition,"lo","hi"))
+
+ggplot(D_formula,aes(x=fail_rate,y=PercNormalized,colour=delayBin,group=delayBin,shape=factor(Condition)))+geom_jitter(height=0.05)+ geom_smooth(method = "lm", fill = NA)
+summary(lm(formula = as.numeric(PercNormalized * 100) ~ as.numeric(fail_rate) * 
+             as.numeric(AvgDelay), data = D_formula[D_formula$fail_rate>.75,]))
