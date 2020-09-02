@@ -108,5 +108,12 @@ D_formula = D_D %>% inner_join(D_ratings)
 ###################################
 # Load the data
 load("data_action_analysis.rda")
-
+D_formula$taskPercent<-ifelse(D_formula$Condition==100,100,D_formula$Condition+50)
+D_formula$delayBin<-as.factor(ifelse(D_formula$AvgDelay<median(D_formula$AvgDelay),"lo","hi"))
 ddd <- lm(as.numeric(PercNormalized*100) ~ as.numeric(fail_rate) * as.numeric(AvgDelay), data=D_formula)
+step(ddd)
+summary(ddd)
+
+ggplot(D_formula,aes(x=fail_rate,y=PercNormalized,colour=delayBin,group=delayBin,shape=factor(Condition)))+geom_point()+ geom_smooth(method = "lm", fill = NA)
+summary(lm(formula = as.numeric(PercNormalized * 100) ~ as.numeric(fail_rate) * 
+     as.numeric(AvgDelay), data = D_formula[D_formula$fail_rate>.75,]))
