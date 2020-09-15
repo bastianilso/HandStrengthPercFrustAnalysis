@@ -70,6 +70,7 @@ D = bind_rows(D %>% filter(Condition == "0", Recog.Rate == 0.5, Fab.Rate == 0.0)
 excludes <- c("1","13","16","17","21", "24")
 D_excl <- D %>% filter(!Participant %in% excludes)
 
+
 ################################
 # T-Test between Kiwi and Hand #
 ################################
