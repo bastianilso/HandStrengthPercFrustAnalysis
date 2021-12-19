@@ -5,7 +5,7 @@ library(coin)
 require(lme4) # For ordinal logistic regression
 library(ggplot2)
 library(Rmisc) #For SummarySE function to get error bars
-source("friedman.with.post.hoc.R")
+#source("friedman.with.post.hoc.R")
 
 #############
 # GOALS ETC #
@@ -47,12 +47,14 @@ load("kiwidata.rda")
 D_rates <- D_rates %>%
   mutate(PID = as.factor(PID))
 
-D_valid <- D %>%
+# Remove NAs from D dataset.
+D <- D %>%
   filter(!is.na(Frustration)) %>%
   mutate(Participant = as.factor(Participant),
          Condition = as.character(Condition))
 
-D <- D_valid %>%
+# Join with D_rates
+D <- D %>%
   inner_join(D_rates, by = c("Participant" = "PID", "Order" = "ConditionOrder"))
 
 # Exclude trials that were bad 
@@ -143,13 +145,12 @@ summary(step(lm(PerceivedControlEpisode~ConditionChange,data=D)))
 
 
 #friedman.test.with.post.hoc(FrustrationEpisode ~ as.factor(Condition) | as.factor(Partcipant), D_excl %>% )
-D_fry <- D_excl %>% dplyr::select(FrustrationEpisode, Condition, Participant) %>% filter(Condition != "100")
+D_fry <- D_excl %>% dplyr::select(PerceivedControlEpisode,FrustrationEpisode, Condition, Participant) %>% filter(Condition != "100")
 D_fry <- as.data.frame(D_fry)
 D_fry$Condition = as.factor(D_fry$Condition)
-str(D_fry)
+D_fry$Participant = as.integer(D_fry$Participant) # Note to self: friedman test requires participant numbers as integers, not factor.
 friedman.test(FrustrationEpisode~Condition|Participant, D_fry)
-
-
+friedman.test(PerceivedControlEpisode~Condition|Participant, D_fry)
 
 #D_excl %>% dplyr::select(FrustrationEpisode, Condition, Participant) %>% filter(Condition != "100") %>% View()
 
@@ -172,7 +173,8 @@ friedman.test(FrustrationEpisode~Condition|Participant, D_fry)
 # WILCOXON TEST #
 #################
 
-D_wil <- D_excl %>% dplyr::select(FrustrationEpisode,PerceivedControlEpisode, Condition, Participant) %>% filter(Condition != "100")
+D_wil <- D_excl %>% dplyr::select(FrustrationEpisode,PerceivedControlEpisode, Condition, Participant)
+D_wil <- as.data.frame(D_wil)
 
 wilcoxsign_test(D_wil[D_wil$Condition=='0',]$FrustrationEpisode ~ D_wil[D_wil$Condition=='15',]$FrustrationEpisode, distribution="exact")
 wilcoxsign_test(D_wil[D_wil$Condition=='0',]$FrustrationEpisode ~ D_wil[D_wil$Condition=='30',]$FrustrationEpisode, distribution="exact")
@@ -180,14 +182,21 @@ wilcoxsign_test(D_wil[D_wil$Condition=='0',]$FrustrationEpisode ~ D_wil[D_wil$Co
 wilcoxsign_test(D_wil[D_wil$Condition=='15',]$FrustrationEpisode ~ D_wil[D_wil$Condition=='30',]$FrustrationEpisode, distribution="exact")
 wilcoxsign_test(D_wil[D_wil$Condition=='15',]$FrustrationEpisode ~ D_wil[D_wil$Condition=='50',]$FrustrationEpisode, distribution="exact")
 wilcoxsign_test(D_wil[D_wil$Condition=='30',]$FrustrationEpisode ~ D_wil[D_wil$Condition=='50',]$FrustrationEpisode, distribution="exact")
+wilcoxsign_test(D_wil[D_wil$Condition=='100',]$FrustrationEpisode ~ D_wil[D_wil$Condition=='0',]$FrustrationEpisode, distribution="exact")
+wilcoxsign_test(D_wil[D_wil$Condition=='100',]$FrustrationEpisode ~ D_wil[D_wil$Condition=='15',]$FrustrationEpisode, distribution="exact")
+wilcoxsign_test(D_wil[D_wil$Condition=='100',]$FrustrationEpisode ~ D_wil[D_wil$Condition=='30',]$FrustrationEpisode, distribution="exact")
+wilcoxsign_test(D_wil[D_wil$Condition=='100',]$FrustrationEpisode ~ D_wil[D_wil$Condition=='50',]$FrustrationEpisode, distribution="exact")
 wilcoxsign_test(GroupA ~ GroupB, distribution="exact")
 wilcoxsign_test(D_wil[D_wil$Condition=='0',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='15',]$PerceivedControlEpisode, distribution="exact")
 wilcoxsign_test(D_wil[D_wil$Condition=='0',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='30',]$PerceivedControlEpisode, distribution="exact")
 wilcoxsign_test(D_wil[D_wil$Condition=='0',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='50',]$PerceivedControlEpisode, distribution="exact")
 wilcoxsign_test(D_wil[D_wil$Condition=='15',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='30',]$PerceivedControlEpisode, distribution="exact")
+wilcoxsign_test(D_wil[D_wil$Condition=='15',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='50',]$PerceivedControlEpisode, distribution="exact")
 wilcoxsign_test(D_wil[D_wil$Condition=='30',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='50',]$PerceivedControlEpisode, distribution="exact")
-wilcoxsign_test(D_wil[D_wil$Condition=='30',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='50',]$PerceivedControlEpisode, distribution="exact")
-
+wilcoxsign_test(D_wil[D_wil$Condition=='100',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='0',]$PerceivedControlEpisode, distribution="exact")
+wilcoxsign_test(D_wil[D_wil$Condition=='100',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='15',]$PerceivedControlEpisode, distribution="exact")
+wilcoxsign_test(D_wil[D_wil$Condition=='100',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='30',]$PerceivedControlEpisode, distribution="exact")
+wilcoxsign_test(D_wil[D_wil$Condition=='100',]$PerceivedControlEpisode ~ D_wil[D_wil$Condition=='50',]$PerceivedControlEpisode, distribution="exact")
 
 
 ###############################
