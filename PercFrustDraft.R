@@ -65,10 +65,20 @@ D_real <- D_valid %>%
 # Exclude trials that were bad 
 
 D_R0 = D_real %>% filter(Condition == "0", Recog.Rate == 0.5)
+D_R0_B = D_real %>% filter(Condition == "0")
 D_R100 = D_real %>% filter(Condition == "100", Recog.Rate == 1)
+D_R100_B = D_real %>% filter(Condition == "100")
 D_15 = D_real %>% filter(Condition == "15", Recog.Rate == 0.5, Fab.Rate == 0.15)
+D_15_B = D_real %>% filter(Condition == "15")
 D_30 = D_real %>% filter(Condition == "30", Recog.Rate == 0.5, Fab.Rate == 0.30)
+D_30_B = D_real %>% filter(Condition == "30")
 D_50 = D_real %>% filter(Condition == "50", Recog.Rate == 0.5, Fab.Rate == 0.50)
+D_50_B = D_real %>% filter(Condition == "50")
+
+D_R100_B %>% anti_join(D_R100) %>% View()
+D_15_B %>% anti_join(D_15) %>% View()
+D_15_B %>% anti_join(D_15) %>% View()
+
 
 D_comb <- bind_rows(D_R0, D_R100, D_15, D_30, D_50)
 
@@ -80,6 +90,24 @@ D_real %>% anti_join(D_comb) %>% dplyr::select(Condition, Participant, Recog.Rat
 excludes <- c(135, 164, 165, 212, 243, 245)
 
 summary(lm(PerceivedControl ~ Order, data=D_comb))
+
+lm(PerceivedControl ~ FabRecogRate, data=D_comb)
+lm(Frustration ~ FabRecogRate, data=D_comb)
+
+p_lin <- function(df, response, term) {
+  min = min(df[[term]]) * 100
+  max = max(df[[term]]) * 100
+  fm <- lm(as.formula(paste(response, "~", term)), data = df)
+  df_p <- data.frame(x = (min:max)/100)
+  df_p[[term]] <- (min:max)/100
+  curve <- data.frame(x = (min:max)/100, y = predict(fm, df_p))
+  return(curve)
+}
+
+export <- p_lin(D_comb, "PerceivedControl", "FabRecogRate")
+hand_frust <- p_lin(D_comb, "Frustration", "FabRecogRate")
+save(export, file = 'hand.rda')
+save(hand_frust, file = 'hand_frust.rda')
 
 ######################
 # VERIFICATION PLOTS #
