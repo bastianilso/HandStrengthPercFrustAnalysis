@@ -2,8 +2,10 @@ library(tidyr)
 library(plotly)
 library(lubridate)
 library(gsheet)
-library(dplyr)
 library(ltm)
+library(lm.beta)
+library(dplyr)
+library(beeswarm)
 
 # Visualization template for plotly - removes unnecessary defaults
 # Visualization template for plotly - removes unnecessary defaults
@@ -122,12 +124,31 @@ load("data_action_analysis.rda")
 
 D_formula$taskPercent<-ifelse(D_formula$Condition==100,100,D_formula$Condition+50)
 D_formula$delayBin<-as.factor(ifelse(D_formula$AvgDelay<median(D_formula$AvgDelay),"lo","hi"))
-ddd <- lm(as.numeric(FrustNormalized*100) ~ as.numeric(1-fail_rate) * as.numeric(AvgDelay), data=D_formula)
+D_formula <- D_formula %>% mutate(activation_rate = as.numeric(1-fail_rate))
+
+ddd <- lm(as.numeric(PercNormalized*100) ~ activation_rate, data=D_formula)
+lm.beta(ddd)
 step(ddd)
 summary(ddd)
 
- ddd <- lm(as.numeric(PercNormalized*100) ~ as.numeric(taskPercent) * as.numeric(AvgDelay), data=D_formula)
+ddd <- lm(as.numeric(PercNormalized*100) ~ as.numeric(AvgDelay), data=D_formula)
 step(ddd)
+summary(ddd)
+
+ddd <- lm(as.numeric(PercNormalized*100) ~ activation_rate * as.numeric(AvgDelay), data=D_formula)
+summary(ddd)
+
+ddd <- lm(as.numeric(FrustNormalized*100) ~ activation_rate * as.numeric(AvgDelay), data=D_formula)
+lm.beta(ddd)
+step(ddd)
+summary(ddd)
+
+ddd <- lm(as.numeric(PercNormalized*100) ~ as.numeric(taskPercent / 100), data=D_formula)
+lm.beta(ddd)
+step(ddd)
+summary(ddd)
+
+ddd <- lm(as.numeric(PercNormalized*100) ~ as.numeric(taskPercent / 100) * as.numeric(AvgDelay), data=D_formula)
 summary(ddd)
 
 D_formula %>% group_by(Condition) %>%
@@ -141,6 +162,8 @@ D_formula %>% group_by(Condition) %>%
 # Is there a correlation between preceived control and frustration?
 # A: Yes, there is a negative correlation.
 model <- lm(FrustNormalized ~ PercNormalized, data=D_formula)
+summary(model)
+lm.beta(model)
 model$a <- model$coefficients[2]
 model$b <- model$coefficients[1]
 
@@ -152,14 +175,14 @@ line = D_formula %>% ungroup() %>% select(PercNormalized) %>% arrange(PercNormal
     y = PercNormalized * model$a + model$b
   ) %>% select(x,y)
 
-D_error <- D_formula %>% ungroup() %>% dplyr::group_by(PercNormalized) %>%
-  summarize(perc_error = qnorm(0.975)*sd(FrustNormalized)/sqrt(26))
+D_error <- D_formula %>% group_by(PercNormalized) %>%
+  dplyr::summarize(perc_error = qnorm(0.975)*sd(FrustNormalized)/sqrt(26))
 
 line = line %>% left_join(D_error, by=c("x" = "PercNormalized")) %>%
   mutate(left_error = y-perc_error,
          right_error = y+perc_error)
 
-fig <- vistemplate %>%
+vistemplate %>%
   add_trace(data=line, x=~x, y=~right_error, mode='lines', type='scatter', line=list(color='transparent')) %>%
   add_trace(data=line, x=~x, y=~left_error, mode='lines', type='scatter', fill='tonexty', fillcolor='rgba(50,50,50,0.2)', line=list(color='transparent')) %>%
   add_trace(data=D_formula, x=~jitter(PercNormalized,amount=.02), y=~jitter(FrustNormalized,amount=.02), color=I('darkgrey'),type='scatter', mode='markers') %>%
@@ -179,11 +202,6 @@ plot_ly() %>%
 #################################
 # lm() Color / Order influence? #
 #################################
-
-
-vistemplate %>%
-  add_trace(data=D_formula, x=~) %>%
-  add_trace() 
 
 ###################################
 # ICC:Intra Class Correlation - Check rating consistency.
@@ -219,9 +237,10 @@ D_formula <- D_formula %>% group_by(Condition) %>%
 D_formula %<>% group_by(Participant, Condition) %>%
   mutate(delayBin = ifelse(AvgDelay < medianprCondition,"lo","hi"))
 
+D_formula %>% group_by(delayBin) %>%
+  dplyr::summarise(mean_delay = mean(AvgDelay)) %>% View()
 
-
-ggplot(D_formula,aes(x=fail_rate,y=PercNormalized,colour=delayBin,group=delayBin,shape=factor(Condition)))+geom_jitter(height=0.05)+ geom_smooth(method = "lm", fill = NA)
+ggplot(D_formula,aes(x=1-fail_rate,y=PercNormalized,colour=delayBin,group=delayBin,shape=factor(Condition)))+geom_jitter(height=0.05)+ geom_smooth(method = "lm", fill = NA)
 summary(lm(formula = as.numeric(PercNormalized * 100) ~ as.numeric(fail_rate) * 
              as.numeric(AvgDelay), data = D_formula[D_formula$fail_rate>.75,]))
 
@@ -229,13 +248,17 @@ summary(lm(formula = as.numeric(PercNormalized * 100) ~ as.numeric(fail_rate) *
 # Violin Plots of input-based recognition  #
 ############################################
 
+D_excl %>% dplyr::select(Participant, Condition, Fab.Rate, Recog.Rate) %>% 
+  dplyr::mutate(Condition = as.character(Condition),
+                Condition = ifelse(Condition == "100", "Ref.", Condition))
+
+
 # Violin Plot Level of Control vs Perceived Control
-D_formula$Condition <- as.character(D_excl$Condition)
-D_formula$Condition[D_formula$Condition == "100"] <- "Ref."
-D_formula$Condition <- as.factor(D_excl$Condition)
-D_formula = D_formula %>%
-  rowwise() %>%
-  mutate(PureControl = ifelse(Fab.Rate == 0,Recog.Rate,NA),
+#D_formula$Condition <- as.character(D_formula$Condition)
+#D_formula$Condition[D_formula$Condition == "100"] <- "Ref."
+#D_formula$Condition <- as.factor(D_formula$Condition)
+D_excl = D_excl %>%
+  dplyr::mutate(PureControl = ifelse(Fab.Rate == 0,Recog.Rate,NA),
          FabControl = ifelse(Fab.Rate > 0,Fab.Rate + Recog.Rate, NA))
 
 PercPureCurve = supsmu(D_excl$PureControl, D_excl$PercNormalized)
@@ -260,15 +283,26 @@ D_error$Condition <- factor(D_error$Condition, levels=c("0", "15", "30", "50", "
 
 PercCurve <- PercCurve %>% merge(D_error, by.x=c("x"), by.y=c("Condition"))
 
+D_excl$Condition <- as.character(D_excl$Condition)
+D_exclbee <- beeswarm::beeswarm(PercNormalized ~ Condition, data=D_excl, method="swarm", priority="density",corral="wrap")
 
-vistemplate %>%
+fig <- vistemplate %>%
   add_trace(x=factor(D_excl$Condition, levels=c("0", "15", "30", "50", "Ref.")), y=jitter(D_excl$PercNormalized,amount=.02),
-            scalemode='width',points='all', pointpos=0,name='C', jitter=.3,
-            scalegroup='C', type="violin", spanmode="soft", width=1, bandwidth=.06, color=I('darkgray')) %>%
-  add_trace(data=PercCurve, x=~x, y=~y, type='scatter', mode='lines+markers', color=I('black'),
-            error_y= list(array=~perc_error)) %>%
-  layout(yaxis = list(range=c(0,1.1), title="Perceived Control", violinmode = 'overlay', violingap = 0), xaxis=list(title="Fabrication Rate (%)"))
+            scalemode='width',points=NULL, outliers=NULL, pointpos=0,name='C', jitter=.5, color=I('rgba(0,0,0,0)'),
+            scalegroup='C', type="violin", spanmode="soft", width=1, bandwidth=.06, line=list(color='rgba(0.3,0.3,0.3,1)',width=1),
+            marker=list(color='rgba(1,1,1,0)', line=list(color='rgba(0.3,0.3,0.3,0)',width=1))) %>%
+  add_trace(data=PercCurve, x=~x, y=~y, type='scatter', mode='lines+markers', color=I('black'), line=list(width=1.5),
+            error_y= list(array=~perc_error, thickness=1.3), marker=list(size=8)) %>%
+  add_trace(x=D_exclbee$x, y=D_exclbee$y, type='scatter', mode='markers', color=I('black'),
+            marker=list(color='rgba(0,0,0,0)',size=5, line=list(color='black',width=1)), xaxis='x2', yaxis='y2') %>%
+  layout(yaxis = list(range=c(0,1.1), title="Perceived Control", violinmode = 'overlay', violingap = 0), xaxis=list(title="Fabrication Rate (%)"),
+         xaxis2 = list(range=c(0.2,5.8), domain=c(0,1), anchor='y2', showticklabels = FALSE, showgrid = FALSE, zeroline=FALSE), yaxis2=list(domain = c(0,1), anchor='x2', showticklabels = FALSE, showgrid = FALSE, zeroline=FALSE),
+         plot_bgcolor  = "rgba(0, 0, 0, 0)",
+         paper_bgcolor = "rgba(0, 0, 0, 0)",
+         fig_bgcolor   = "rgba(0, 0, 0, 0)")
+
+
 
 orca(fig, "level-of-control-perceived.pdf", width=350, height=350)
 
-su
+
